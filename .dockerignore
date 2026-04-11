@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.gitignore
+prisma/db
+*.db
+*.db-journal
+.vscode
+download
+screenshot-*
+skills
+HANDOVER.md
+worklog.md
+.claude

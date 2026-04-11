@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { QUIZ_DATA, DIM_ORDER, VECTOR_VALUE, type Question, type PersonalityType, type SpecialType } from '@/lib/quiz-data'
+import { QUIZ_DATA, DIM_ORDER, VECTOR_VALUE, type PersonalityType, type SpecialType } from '@/lib/quiz-data'
 
 // ==========================================
 // Types
@@ -23,6 +23,29 @@ interface QuizResult {
   isSpecial: boolean
   userVector: string
   matchList?: (PersonalityType & { distance: number; similarity: number })[]
+}
+
+// Fetched quiz data from API
+interface ApiQuizData {
+  questions: { dim: string; text: string; options: { label: string; score: number }[] }[]
+  gateQuestion: { text: string; options: { label: string; value: string }[] } | null
+  triggerQuestion: { text: string; options: { label: string; value: string; trigger?: string }[] } | null
+  types: PersonalityType[]
+  specialTypes: SpecialType[]
+}
+
+// Device-based user ID
+function getOrCreateUserId(): string {
+  try {
+    let id = localStorage.getItem('wbti-user-id')
+    if (!id) {
+      id = crypto.randomUUID()
+      localStorage.setItem('wbti-user-id', id)
+    }
+    return id
+  } catch {
+    return crypto.randomUUID()
+  }
 }
 
 // ==========================================
@@ -209,14 +232,28 @@ function SimilarityRing({ similarity, color, size = 120 }: { similarity: number;
 // ==========================================
 // Meme Carousel — Enhanced with ring animation
 // ==========================================
-const MEME_EMOJIS = ['🎮', '👥', '🦽', '🎰', '💪', '🤡', '🛋️', '🐺', '🔒', '💹', '✨', '📖', '🏴', '⚔️', '🦥', '🛡️', '🚫', '🔍', '🥚', '🔄', '⚡', '📚', '🌟', '🃏', '😈']
+const MEME_IMAGES = [
+  '/img-sy/笑死.png',
+  '/img-sy/好耶.png',
+  '/img-sy/大哭.png',
+  '/img-sy/惊讶，啊？.png',
+  '/img-sy/爱了爱了.png',
+  '/img-sy/就这？.png',
+  '/img-sy/思考中.png',
+  '/img-sy/赞诶.png',
+  '/img-sy/遵命.png',
+  '/img-sy/酷酷的.png',
+  '/img-sy/满眼爱心.png',
+  '/img-sy/双手合十对不起.png',
+  '/img-sy/合作愉快.png',
+]
 
 function MemeCarousel() {
   const [currentIdx, setCurrentIdx] = useState(0)
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentIdx(prev => (prev + 1) % MEME_EMOJIS.length)
+      setCurrentIdx(prev => (prev + 1) % MEME_IMAGES.length)
     }, 2500)
     return () => clearInterval(interval)
   }, [])
@@ -235,46 +272,21 @@ function MemeCarousel() {
       <AnimatePresence mode="wait">
         <motion.div
           key={currentIdx}
-          className="absolute inset-0 w-full h-full rounded-full flex items-center justify-center z-[1] text-5xl"
+          className="absolute inset-0 w-full h-full rounded-full flex items-center justify-center z-[1] overflow-hidden"
           initial={{ opacity: 0, scale: 0.5, rotate: -20 }}
           animate={{ opacity: 1, scale: 1, rotate: 0 }}
           exit={{ opacity: 0, scale: 1.3, rotate: 20 }}
           transition={{ duration: 0.35, type: 'spring', stiffness: 200, damping: 20 }}
         >
-          {MEME_EMOJIS[currentIdx]}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={MEME_IMAGES[currentIdx]}
+            alt="meme"
+            className="w-[80px] h-[80px] object-contain"
+          />
         </motion.div>
       </AnimatePresence>
     </div>
-  )
-}
-
-// ==========================================
-// Type Carousel on Welcome — Rotating type names
-// ==========================================
-function TypeCarousel() {
-  const [idx, setIdx] = useState(0)
-  const types = useMemo(() => QUIZ_DATA.types.map(t => ({ name: t.name, emoji: t.emoji })), [])
-
-  useEffect(() => {
-    const interval = setInterval(() => setIdx(prev => (prev + 1) % types.length), 1800)
-    return () => clearInterval(interval)
-  }, [types.length])
-
-  return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={idx}
-        className="flex items-center gap-2 text-[0.72rem]"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.25 }}
-        style={{ color: 'var(--wbti-text-3)' }}
-      >
-        <span>{types[idx].emoji}</span>
-        <span style={{ fontFamily: 'var(--font-main)' }}>{types[idx].name}</span>
-      </motion.div>
-    </AnimatePresence>
   )
 }
 
@@ -368,16 +380,6 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
               卫戍协议 <em className="not-italic" style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--wbti-text)', fontWeight: 400 }}>重度依赖</em> 测试
             </motion.h2>
 
-            {/* Rotating type names */}
-            <motion.div
-              className="mb-4 h-5"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-            >
-              <TypeCarousel />
-            </motion.div>
-
             {/* Stats line */}
             <motion.div
               className="flex items-center gap-4 mb-5 text-[0.62rem] tracking-wider"
@@ -441,7 +443,7 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
 // ==========================================
 // Test Screen — Enhanced with Framer Motion
 // ==========================================
-function TestScreen({ currentQuestion, totalQuestions, question, onAnswer, companionEmoji }: { currentQuestion: number; totalQuestions: number; question: QuizQuestionBase | null; onAnswer: (qIdx: number, value: number | string) => void; companionEmoji: string }) {
+function TestScreen({ currentQuestion, totalQuestions, question, onAnswer, companionEmoji, companionImg }: { currentQuestion: number; totalQuestions: number; question: QuizQuestionBase | null; onAnswer: (qIdx: number, value: number | string) => void; companionEmoji: string; companionImg: string }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
   const [direction, setDirection] = useState(1)
 
@@ -496,28 +498,21 @@ function TestScreen({ currentQuestion, totalQuestions, question, onAnswer, compa
           <div className="text-[0.72rem] tracking-[3px] font-normal" style={{ fontFamily: 'var(--font-tech)', color: 'var(--wbti-text-3)' }}>
             <span style={{ color: 'var(--wbti-accent)', fontWeight: 700 }}>{currentQuestion + 1}</span> / {totalQuestions}
           </div>
-          {/* Dimension badge */}
-          {dimLabel && !isGate && !isTrigger && (
-            <motion.span
-              className="text-[0.55rem] tracking-[1px] px-2 py-0.5 rounded-full"
-              style={{ background: 'var(--wbti-accent-dim)', border: '1px solid var(--wbti-border-accent)', color: 'var(--wbti-accent)', fontFamily: 'var(--font-tech)' }}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              {dimLabel}
-            </motion.span>
-          )}
         </div>
         <motion.div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0"
+          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
           style={{ border: '1.5px solid var(--wbti-border-accent)', background: 'rgba(0,221,179,0.04)', boxShadow: '0 2px 12px rgba(0,0,0,0.2)' }}
-          key={companionEmoji}
+          key={companionImg || companionEmoji}
           initial={{ scale: 0, rotate: -180 }}
           animate={{ scale: 1, rotate: 0 }}
           transition={{ type: 'spring', stiffness: 200, damping: 15 }}
         >
-          {companionEmoji}
+          {companionImg ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={companionImg} alt="companion" className="w-8 h-8 object-contain" />
+          ) : (
+            <span className="text-xl">{companionEmoji}</span>
+          )}
         </motion.div>
       </div>
 
@@ -663,7 +658,14 @@ function TopMatches({ matchList, topCode }: { matchList: (PersonalityType & { di
             <span className="text-[0.62rem] font-bold min-w-[18px]" style={{ fontFamily: 'var(--font-tech)', color: i === 0 ? 'var(--wbti-accent)' : 'var(--wbti-text-3)' }}>
               #{i + 1}
             </span>
-            <span className="text-xl shrink-0">{match.emoji}</span>
+            <span className="w-6 h-6 shrink-0 flex items-center justify-center overflow-hidden">
+              {'img' in match && match.img ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={`/${(match as PersonalityType).img.replace(/^img\//, '')}`} alt="" className="w-6 h-6 object-contain" />
+              ) : (
+                <span className="text-xl">{match.emoji}</span>
+              )}
+            </span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-[0.78rem] font-semibold truncate" style={{ color: match.code === topCode ? match.color : 'var(--wbti-text-2)' }}>{match.name}</span>
@@ -741,7 +743,7 @@ function ResultScreen({ result, onRetry }: { result: QuizResult; onRetry: () => 
   const group = QUIZ_DATA.groups.find(g => g.id === ('group' in top ? top.group : ''))
 
   return (
-    <div className="max-w-[540px] w-full p-4 sm:p-6 overflow-y-auto max-h-screen mx-auto pb-12" style={{ scrollbarWidth: 'thin' }}>
+    <div className="max-w-[540px] w-full p-4 sm:p-6 overflow-y-auto max-h-screen mx-auto pb-12 no-scrollbar">
       {/* Confetti */}
       {showConfetti && <ConfettiEffect color={top.color} />}
 
@@ -920,6 +922,7 @@ function ResultScreen({ result, onRetry }: { result: QuizResult; onRetry: () => 
 // ==========================================
 export default function Home() {
   const [screen, setScreen] = useState<Screen>('welcome')
+  const [loading, setLoading] = useState(true)
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [questions, setQuestions] = useState<QuizQuestionBase[]>([])
   const [dimScores, setDimScores] = useState<Record<string, number>>(() => {
@@ -930,6 +933,14 @@ export default function Home() {
   const [isTriggerGuide, setIsTriggerGuide] = useState(false)
   const [result, setResult] = useState<QuizResult | null>(null)
   const [companionEmoji, setCompanionEmoji] = useState('')
+  const [companionImg, setCompanionImg] = useState('')
+
+  // API-fetched quiz data
+  const [apiData, setApiData] = useState<ApiQuizData | null>(null)
+  const apiDataRef = useRef<ApiQuizData | null>(null)
+
+  // Device-based user ID
+  const userIdRef = useRef<string>('')
 
   // Use refs for mutable state access in callbacks
   const questionsRef = useRef(questions)
@@ -941,19 +952,44 @@ export default function Home() {
   useEffect(() => { dimScoresRef.current = dimScores }, [dimScores])
   useEffect(() => { currentQuestionRef.current = currentQuestion }, [currentQuestion])
   useEffect(() => { isTriggerGuideRef.current = isTriggerGuide }, [isTriggerGuide])
+  useEffect(() => { apiDataRef.current = apiData }, [apiData])
 
-  const companionPool = useMemo(() => QUIZ_DATA.types.map(t => t.emoji), [])
+  // Fetch quiz data from API
+  useEffect(() => {
+    fetch('/api/quiz')
+      .then(r => r.json())
+      .then((data: ApiQuizData) => {
+        setApiData(data)
+        apiDataRef.current = data
+      })
+      .catch(err => console.error('Failed to fetch quiz data:', err))
+      .finally(() => setLoading(false))
+
+    userIdRef.current = getOrCreateUserId()
+  }, [])
+
+  const companionPool = useMemo(() => apiData?.types.map(t => t.emoji) ?? [], [apiData])
+  const companionImages = useMemo(() => [
+    '/博士生气.png', '/博士紧张惊讶.png', '/博士疲惫睡着.png', '/彻底无语.png',
+    '/彻底心动.png', '/流汗了.png', '/就这？.png', '/笑死.png', '/惊讶，啊？.png',
+    '/双手合十对不起.png', '/爱了爱了.png', '/思考中.png', '/赞诶.png', '/遵命.png',
+    '/好耶.png', '/酷酷的.png', '/大哭.png', '/满眼爱心.png', '/合作愉快.png',
+    '/求安慰.png', '/气鼓鼓.png', '/眯眼软笑、脸颊鼓鼓，是温柔治愈.png',
+  ], [])
   const randomEmoji = useCallback(() => companionPool[Math.floor(Math.random() * companionPool.length)], [companionPool])
+  const randomCompanionImage = useCallback(() => companionImages[Math.floor(Math.random() * companionImages.length)], [companionImages])
 
-  // Build question list
+  // Build question list from API data
   const buildQuestionList = useCallback(() => {
-    const regular = [...QUIZ_DATA.questions]
+    const data = apiDataRef.current
+    if (!data) return []
+    const regular = [...data.questions]
     for (let i = regular.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
       ;[regular[i], regular[j]] = [regular[j], regular[i]]
     }
     const gatePos = 14 + Math.floor(Math.random() * 4)
-    const gate: QuizQuestionBase = { type: 'gate', dim: '', text: QUIZ_DATA.gateQuestion.text, options: QUIZ_DATA.gateQuestion.options }
+    const gate: QuizQuestionBase = { type: 'gate', dim: '', text: data.gateQuestion?.text || '', options: data.gateQuestion?.options || [] }
     return [
       ...regular.slice(0, gatePos).map(q => ({ ...q, type: 'regular' as const })),
       gate,
@@ -961,18 +997,21 @@ export default function Home() {
     ]
   }, [])
 
-  // Calculate result
+  // Calculate result using API data
   const calculateResult = useCallback((scores: Record<string, number>, triggered: boolean): QuizResult => {
+    const data = apiDataRef.current
+    if (!data) return { type: { code: 'ERR', name: 'Error', group: '', emoji: '❌', color: '#FF0000', img: '', vector: '', desc: '数据加载失败', slogan: '' }, similarity: 0, isSpecial: true, userVector: '' }
+
     const userVec = DIM_ORDER.map(d => { const s = scores[d] || 0; return s <= 3 ? 0 : s >= 5 ? 2 : 1 })
     const vectorToCode = (vec: number[]) => vec.map(v => v === 0 ? 'L' : v === 1 ? 'M' : 'H').join('').match(/.{3}/g)!.join('-')
     const userVector = vectorToCode(userVec)
 
     if (triggered) {
-      return { type: QUIZ_DATA.specialTypes.find(t => t.code === 'GLJL')!, similarity: 100, isSpecial: true, userVector }
+      return { type: data.specialTypes.find(t => t.code === 'GLJL')!, similarity: 100, isSpecial: true, userVector }
     }
 
     const parseVectorStr = (str: string) => str.split('-').join('').split('').map(c => VECTOR_VALUE[c])
-    const matchList = QUIZ_DATA.types.map(type => {
+    const matchList = data.types.map(type => {
       const typeVec = parseVectorStr(type.vector)
       const distance = userVec.reduce((sum, v, i) => sum + Math.abs(v - typeVec[i]), 0)
       return { ...type, distance, similarity: Number(((1 - distance / 30) * 100).toFixed(1)) }
@@ -981,7 +1020,7 @@ export default function Home() {
 
     const best = matchList[0]
     if (best.similarity < 60) {
-      return { type: QUIZ_DATA.specialTypes.find(t => t.code === 'MYLZ')!, similarity: best.similarity, isSpecial: true, userVector, matchList }
+      return { type: data.specialTypes.find(t => t.code === 'MYLZ')!, similarity: best.similarity, isSpecial: true, userVector, matchList }
     }
     return { type: best, similarity: best.similarity, isSpecial: false, userVector, matchList }
   }, [])
@@ -1001,6 +1040,7 @@ export default function Home() {
     questionsRef.current = newQuestions
     setScreen('test')
     setCompanionEmoji(randomEmoji())
+    setCompanionImg(randomCompanionImage())
   }, [buildQuestionList, randomEmoji])
 
   // Handle answer — uses refs to avoid stale closures
@@ -1017,15 +1057,17 @@ export default function Home() {
       dimScoresRef.current = newScores
     } else if (q.type === 'gate' && typeof value === 'string') {
       if (value === 'guide') {
-        const trigger: QuizQuestionBase = { type: 'trigger', dim: '', text: QUIZ_DATA.triggerQuestion.text, options: QUIZ_DATA.triggerQuestion.options }
+        const data = apiDataRef.current
+        const trigger: QuizQuestionBase = { type: 'trigger', dim: '', text: data?.triggerQuestion?.text || '', options: data?.triggerQuestion?.options || [] }
         const newQuestions = [...currentQs]
         newQuestions.splice(qIdx + 1, 0, trigger)
         setQuestions(newQuestions)
         questionsRef.current = newQuestions
       }
     } else if (q.type === 'trigger' && typeof value === 'string') {
-      const triggerOpt = QUIZ_DATA.triggerQuestion.options.find(o => o.value === value)
-      if (triggerOpt && 'trigger' in triggerOpt && triggerOpt.trigger) {
+      const data = apiDataRef.current
+      const triggerOpt = data?.triggerQuestion?.options.find(o => o.value === value)
+      if (triggerOpt && triggerOpt.trigger) {
         setIsTriggerGuide(true)
         isTriggerGuideRef.current = true
       }
@@ -1037,11 +1079,25 @@ export default function Home() {
       setCurrentQuestion(nextIdx)
       currentQuestionRef.current = nextIdx
       setCompanionEmoji(randomEmoji())
+      setCompanionImg(randomCompanionImage())
     } else {
       setCurrentQuestion(nextIdx)
       currentQuestionRef.current = nextIdx
       const res = calculateResult(dimScoresRef.current, isTriggerGuideRef.current)
       setResult(res)
+      // Fire-and-forget save to backend
+      fetch('/api/results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userIdRef.current,
+          resultCode: res.type.code,
+          resultName: res.type.name,
+          similarity: res.similarity,
+          userVector: res.userVector,
+          isSpecial: res.isSpecial,
+        }),
+      }).catch(() => {})
       setTimeout(() => setScreen('result'), 500)
     }
   }, [calculateResult, randomEmoji])
@@ -1068,6 +1124,19 @@ export default function Home() {
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [screen, questions, currentQuestion, handleAnswer])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ fontFamily: 'var(--font-main)', background: 'var(--wbti-bg)', color: 'var(--wbti-text)' }}>
+        <ParticleCanvas />
+        <div className="relative z-[2] text-center">
+          <div className="text-[0.8rem] tracking-[3px] animate-pulse" style={{ fontFamily: 'var(--font-tech)', color: 'var(--wbti-accent)' }}>
+            LOADING...
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ fontFamily: 'var(--font-main)', background: 'var(--wbti-bg)', color: 'var(--wbti-text)' }}>
@@ -1103,7 +1172,7 @@ export default function Home() {
             exit={{ opacity: 0, x: -50 }}
             transition={{ duration: 0.35 }}
           >
-            <TestScreen currentQuestion={currentQuestion} totalQuestions={questions.length} question={questions[currentQuestion] || null} onAnswer={handleAnswer} companionEmoji={companionEmoji} />
+            <TestScreen currentQuestion={currentQuestion} totalQuestions={questions.length} question={questions[currentQuestion] || null} onAnswer={handleAnswer} companionEmoji={companionEmoji} companionImg={companionImg} />
           </motion.div>
         )}
 

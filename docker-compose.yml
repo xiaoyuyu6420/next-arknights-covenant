@@ -1,0 +1,13 @@
+services:
+  wbti:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - wbti-db:/app/prisma/db
+    environment:
+      - DATABASE_URL=file:./db/wbti.db
+    restart: unless-stopped
+
+volumes:
+  wbti-db:
