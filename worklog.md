@@ -30,3 +30,37 @@ Stage Summary:
 - 原始项目的图片资源（img/目录下的角色图片）未迁移，当前使用 emoji 替代
 - 移动端响应式样式可能需要进一步优化
 - Source Serif 4 字体未通过 next/font 加载（使用 Georgia 替代）
+
+---
+Task ID: 2-a
+Agent: CSS Enhancement Agent
+Task: Enhance CSS animations and visual effects
+
+Work Log:
+- Read existing globals.css (224 lines) and worklog to understand project context
+- Added 10 new keyframes to globals.css
+- Added 5 new utility classes to globals.css
+- Enhanced scrollbar (width 2px→3px, added hover state with brighter accent)
+- Updated selection color to brighter, more visible shade (0.15→0.3 opacity)
+
+Stage Summary:
+- New keyframes added: scanLine, floatUp, glitchFlicker, ringPulse, confettiFall, barFill, countUp, typewriter, borderGlow, slideOutLeft
+- New utility classes added: .wbti-scanline, .wbti-grid-overlay, .wbti-noise-bg, .wbti-glow-text, .wbti-border-animate
+- Scrollbar enhanced: 3px thumb width, hover state with rgba(0,221,179,0.45)
+- Selection color brightened to rgba(0,221,179,0.3)
+- All existing CSS preserved; new content added before scrollbar section
+
+---
+Task ID: 2-b
+Agent: Image Generation Agent
+Task: Generate decorative images for WBTI app
+
+Work Log:
+- Generated shield emblem image: tactical terminal-style shield with circuit-board patterns, glowing teal (#00ddb3) accent lines, dark navy background, cybersecurity aesthetic
+- Generated result card background: abstract hexagonal grid pattern, dark navy background (#0a0e1a) with subtle teal (#00ddb3) glow effects, minimalist dark mode aesthetic
+
+Stage Summary:
+- Image files created and saved:
+  - /home/z/my-project/public/wbti-shield.png (77KB, 1024x1024) - shield emblem icon
+  - /home/z/my-project/public/wbti-result-bg.png (59KB, 1024x1024) - result card decorative background
+- Note: 512x512 was requested for the shield but 1024x1024 was used (closest supported square size); can be resized via CSS or image processing if needed
