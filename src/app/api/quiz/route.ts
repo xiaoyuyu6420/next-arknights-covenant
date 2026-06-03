@@ -1,17 +1,18 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const locale = request.nextUrl.searchParams.get('locale') || 'zh'
+
   const questions = await prisma.question.findMany({
-    where: { active: true },
+    where: { active: true, locale },
     include: { options: { orderBy: { order: 'asc' } } },
     orderBy: { order: 'asc' },
   })
 
-  const types = await prisma.personalityType.findMany({ orderBy: { id: 'asc' } })
-  const specialTypes = await prisma.specialType.findMany({ orderBy: { id: 'asc' } })
+  const types = await prisma.personalityType.findMany({ where: { locale }, orderBy: { id: 'asc' } })
+  const specialTypes = await prisma.specialType.findMany({ where: { locale }, orderBy: { id: 'asc' } })
 
-  // Group questions by type
   const regularQuestions = questions.filter(q => q.type === 'regular')
   const gateQuestion = questions.find(q => q.type === 'gate')
   const triggerQuestion = questions.find(q => q.type === 'trigger')
