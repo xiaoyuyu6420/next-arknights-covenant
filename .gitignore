@@ -59,6 +59,10 @@ prisma/db/
 *.db
 *.db-journal
 
+# Backups
+wbti数据备份/
+wbti数据备份.zip
+
 # Docker
 wbti-image.tar.gz
 
@@ -66,3 +70,6 @@ wbti-image.tar.gz
 download/
 screenshot-*
 .vscode/
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md
