@@ -1,13 +1,14 @@
 services:
   wbti:
-    build: .
+    image: ghcr.io/xiaoyuyu6420/next-arknights-covenant:latest
+    container_name: wbti-app
     ports:
-      - "3000:3000"
+      - "8080:3000"
     volumes:
-      - wbti-db:/app/prisma/db
+      - /home/wbti/data/prisma/db:/app/prisma/db
     environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
       - DATABASE_URL=file:./db/wbti.db
-    restart: unless-stopped
-
-volumes:
-  wbti-db:
+    restart: always
