@@ -20,7 +20,7 @@ COPY . .
 RUN bunx prisma generate \
     && bunx prisma db push \
     && bun run prisma/seed.ts \
-    && bun run build
+    && npx next build
 
 # ============================================
 # Stage 2: Production
