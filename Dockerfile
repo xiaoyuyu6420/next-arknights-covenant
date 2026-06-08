@@ -4,6 +4,8 @@
 FROM oven/bun:1 AS builder
 WORKDIR /app
 
+ENV DATABASE_URL=file:./db/wbti.db
+
 # Copy dependency files first for better caching
 COPY package.json bun.lock* ./
 COPY prisma/schema.prisma ./prisma/schema.prisma
@@ -49,12 +51,14 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 # Copy Prisma schema and pre-seeded DB
 COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
 COPY --from=builder /app/prisma/db/wbti.db ./prisma/db/wbti.db.init
+COPY --from=builder /app/scripts/ensure-db-schema.cjs ./scripts/ensure-db-schema.cjs
 
 # Copy entrypoint
 COPY entrypoint.sh /app/entrypoint.sh
 
 # Make DB dir writable, entrypoint executable
 RUN mkdir -p /app/prisma/db \
+    && mkdir -p /app/scripts \
     && chown -R nextjs:nodejs /app/prisma/db \
     && chmod +x /app/entrypoint.sh
 
