@@ -26,7 +26,7 @@ RUN bunx prisma generate \
 # Stage 2: Production
 # ============================================
 FROM node:20-alpine AS runner
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat sqlite curl
 
 WORKDIR /app
 
@@ -53,14 +53,14 @@ COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
 COPY --from=builder /app/prisma/db/wbti.db ./prisma/db/wbti.db.init
 COPY --from=builder /app/scripts/ensure-db-schema.cjs ./scripts/ensure-db-schema.cjs
 
-# Copy entrypoint
+# Copy backup script and entrypoint
+COPY scripts/backup.sh /app/scripts/backup.sh
 COPY entrypoint.sh /app/entrypoint.sh
 
-# Make DB dir writable, entrypoint executable
-RUN mkdir -p /app/prisma/db \
-    && mkdir -p /app/scripts \
-    && chown -R nextjs:nodejs /app/prisma/db \
-    && chmod +x /app/entrypoint.sh
+# Make dirs writable, scripts executable
+RUN mkdir -p /app/prisma/db /app/scripts /backups \
+    && chown -R nextjs:nodejs /app/prisma/db /backups \
+    && chmod +x /app/entrypoint.sh /app/scripts/backup.sh
 
 USER nextjs
 
