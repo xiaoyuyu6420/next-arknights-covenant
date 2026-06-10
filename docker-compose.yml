@@ -6,13 +6,13 @@ services:
     ports:
       - "8080:3000"
     volumes:
-      - /home/wbti/data:/app/data
-      - /home/wbti/backups:/backups
+      - /home/wbti/data/prisma/db:/app/prisma/db
+      - /home/wbti/data/backups:/backups
     environment:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
-      - DATABASE_URL=file:/app/data/prisma/db/wbti.db
+      - DATABASE_URL=file:./db/wbti.db
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
