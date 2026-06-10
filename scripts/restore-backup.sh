@@ -12,7 +12,8 @@ if [ ! -d "$BACKUP_DIR" ]; then
   exit 1
 fi
 
-backups=($(ls -t "$BACKUP_DIR"/*.db.gz 2>/dev/null))
+# Safe file listing with null delimiter
+mapfile -t backups < <(find "$BACKUP_DIR" -maxdepth 1 -name "*.db.gz" -type f -print0 | sort -zr | xargs -0 -n1 echo)
 
 if [ ${#backups[@]} -eq 0 ]; then
   echo "错误: 没有找到备份文件"
@@ -37,6 +38,12 @@ if [ -n "$1" ]; then
 else
   read -p "选择备份编号 (默认 0): " selection
   selection=${selection:-0}
+
+  # Validate numeric input
+  if ! [[ "$selection" =~ ^[0-9]+$ ]]; then
+    echo "错误: 请输入数字"
+    exit 1
+  fi
 
   if [ "$selection" -ge "${#backups[@]}" ] || [ "$selection" -lt 0 ]; then
     echo "错误: 无效的选择"
@@ -68,6 +75,12 @@ fi
 
 echo "恢复数据库..."
 gunzip -c "$selected_backup" > "$DB_PATH"
+
+# Verify database integrity
+if ! sqlite3 "$DB_PATH" "PRAGMA integrity_check;" > /dev/null 2>&1; then
+  echo "警告: 数据库完整性检查失败"
+fi
+
 echo "数据库已恢复"
 
 echo "启动服务..."
