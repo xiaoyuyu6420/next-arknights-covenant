@@ -17,10 +17,6 @@
 | 人格类型数 | 25 + 2 种特殊类型 |
 | 搜索引擎收录 | Bing 搜索"卫戍协议测试"排名第二 |
 
-## 关于流量
-
-本项目在卫戍协议活跃期间获得了大量传播，累计超 1.2 万人完成测试。近期流量下降是因为《明日方舟》卫戍协议模式暂时关闭，待模式重开后流量预期将回升。
-
 ## 特性
 
 - **25 种人格类型** + 2 种特殊类型，每种都有详细描述和吐槽
@@ -63,17 +59,53 @@ bun run build
 # 管理后台: http://localhost:3000/admin
 ```
 
+## 一键部署
+
+服务器上执行：
+
+```bash
+curl -sSL https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main/scripts/deploy.sh | bash
+```
+
+脚本会自动：
+- 检查 Docker 环境
+- 引导配置阿里云镜像加速（可选）
+- 创建部署目录 `/home/wbti`
+- 下载 `docker-compose.yml`
+- 拉取镜像并启动容器
+- 健康检查确认服务就绪
+
+部署完成后访问 `http://<服务器IP>:8080`
+
+### 日常更新
+
+```bash
+cd /home/wbti && docker compose pull && docker compose up -d
+```
+
+### 回滚
+
+```bash
+cd /home/wbti && bash scripts/deploy.sh --rollback
+```
+
+### 恢复数据库
+
+```bash
+bash /home/wbti/scripts/restore-backup.sh
+```
+
 ## Docker 部署
 
 ```bash
 # 构建并启动
 docker compose up -d
 
-# 自定义端口（默认 3000）
-PORT=8080 docker compose up -d
+# 自定义端口（默认 8080）
+sed -i 's/8080/9000/' docker-compose.yml && docker compose up -d
 ```
 
-数据库文件持久化在 `prisma/db/wbti.db`。
+数据库文件持久化在 `/home/wbti/data/prisma/db`，备份在 `/home/wbti/backups`。
 
 ## 项目结构
 
@@ -96,6 +128,10 @@ prisma/
 └── db/wbti.db                # SQLite 数据库
 public/
 └── img-sy/                   # 表情包图片资源
+scripts/
+├── deploy.sh                 # 一键部署脚本
+├── backup.sh                 # 数据库备份脚本
+└── restore-backup.sh         # 数据库恢复工具
 ```
 
 ## 数据模型
@@ -105,23 +141,6 @@ public/
 - **PersonalityType** - 25 种人格类型（向量编码 + 描述）
 - **SpecialType** - 特殊人格类型（攻略大佬 / 电子斗蛐蛐）
 - **TestRecord** - 测试记录（用户 ID、结果、相似度、时间戳）
-
-## 一键部署
-
-服务器上执行：
-
-```bash
-curl -sSL https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main/scripts/deploy.sh | bash
-```
-
-脚本会自动：
-- 检查 Docker 环境
-- 引导配置阿里云镜像加速（可选）
-- 创建部署目录 `/opt/wbti`
-- 下载 `docker-compose.yml`
-- 拉取镜像并启动容器
-
-部署完成后访问 `http://<服务器IP>:8080`
 
 ## License
 
