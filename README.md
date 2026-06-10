@@ -54,6 +54,10 @@ bun install
 # 启动开发服务器
 bun dev
 
+# 类型检查和生产构建
+bun run typecheck
+bun run build
+
 # 访问
 # 主页: http://localhost:3000
 # 管理后台: http://localhost:3000/admin
@@ -86,7 +90,7 @@ src/
 │       └── admin/            # 管理接口（CRUD + 统计）
 ├── lib/
 │   ├── quiz-data.ts          # 默认题目和人格类型数据
-│   └── prisma.ts             # Prisma 客户端
+│   └── db.ts                 # Prisma 客户端
 prisma/
 ├── schema.prisma             # 数据库模型定义
 └── db/wbti.db                # SQLite 数据库
@@ -102,6 +106,23 @@ public/
 - **SpecialType** - 特殊人格类型（攻略大佬 / 电子斗蛐蛐）
 - **TestRecord** - 测试记录（用户 ID、结果、相似度、时间戳）
 
+## 一键部署
+
+服务器上执行：
+
+```bash
+curl -sSL https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main/scripts/deploy.sh | bash
+```
+
+脚本会自动：
+- 检查 Docker 环境
+- 引导配置阿里云镜像加速（可选）
+- 创建部署目录 `/opt/wbti`
+- 下载 `docker-compose.yml`
+- 拉取镜像并启动容器
+
+部署完成后访问 `http://<服务器IP>:8080`
+
 ## License
 
-MIT
+[GPL-3.0](LICENSE) - 修改后必须开源并保留原作者信息
