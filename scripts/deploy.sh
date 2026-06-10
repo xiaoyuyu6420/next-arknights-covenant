@@ -21,7 +21,13 @@ rollback() {
   fi
 
   current=$(cat "$VERSION_FILE")
-  previous=$(grep -v "^$current$" "$VERSION_FILE.history" 2>/dev/null | tail -1)
+  
+  if [ ! -f "$VERSION_FILE.history" ]; then
+    echo "错误: 没有历史版本记录"
+    exit 1
+  fi
+
+  previous=$(grep -v "^$current$" "$VERSION_FILE.history" | tail -1)
 
   if [ -z "$previous" ]; then
     echo "错误: 没有找到上一个版本"
@@ -67,10 +73,24 @@ if [ -f docker-compose.yml ]; then
   cp docker-compose.yml "$backup_name"
   echo "  已备份: $backup_name"
 fi
-if ! curl -sSf --connect-timeout 10 -o docker-compose.yml "$GITHUB_RAW/docker-compose.yml" 2>/dev/null; then
+
+download_success=false
+if curl -sSf --connect-timeout 10 -o docker-compose.yml.new "$GITHUB_RAW/docker-compose.yml" 2>/dev/null; then
+  download_success=true
+else
   echo "  直连失败，尝试镜像加速..."
-  curl -sSf --connect-timeout 10 -o docker-compose.yml "$GITHUB_PROXY/docker-compose.yml"
+  if curl -sSf --connect-timeout 10 -o docker-compose.yml.new "$GITHUB_PROXY/docker-compose.yml" 2>/dev/null; then
+    download_success=true
+  fi
 fi
+
+if [ "$download_success" = false ] || [ ! -s docker-compose.yml.new ]; then
+  echo "错误: 下载 docker-compose.yml 失败"
+  exit 1
+fi
+
+mv docker-compose.yml.new docker-compose.yml
+echo "  下载成功"
 
 # 3. 获取最新版本 SHA
 echo "[3/4] 获取最新版本..."
@@ -85,8 +105,8 @@ if [ ! -f /etc/docker/daemon.json ] || ! grep -q "registry-mirrors" /etc/docker/
     echo "  请前往 https://cr.console.aliyun.com/cn-hangzhou/instances/mirrors 获取加速地址"
     read -p "  请输入加速地址 (留空跳过): " mirror_url
     if [ -n "$mirror_url" ]; then
-      if [[ ! "$mirror_url" =~ ^https?://[a-zA-Z0-9./_-]+$ ]]; then
-        echo "  无效的镜像地址格式，跳过"
+      if [[ ! "$mirror_url" =~ ^https://[a-zA-Z0-9.-]+\.mirror\.aliyuncs\.com/?$ ]]; then
+        echo "  无效的阿里云镜像地址格式，跳过"
       else
         mkdir -p /etc/docker
         echo "{\"registry-mirrors\":[\"$mirror_url\"]}" > /etc/docker/daemon.json
