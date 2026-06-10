@@ -1,26 +1,29 @@
-# CLAUDE.md - 项目指南
+# CLAUDE.md
+
+## Repository Overview
+
+WBTI (卫戍协议重度依赖测试) — a Next.js personality quiz app for Arknights players. Users answer 30 questions across 15 dimensions, then the server matches their answers to 1 of 25 personality types via a vector algorithm. Supports 2 locales (zh, ja) and includes an admin dashboard.
+
+## Common Commands
+
+```bash
+bun install          # Install dependencies
+bun dev              # Start dev server on http://localhost:3000
+bun run build        # Production build
+bun run typecheck    # TypeScript check
+```
 
 ## Git 操作规范
 
 ### 自动推送规则
 
-每次完成以下操作后，**自动推送到远程**：
-
-1. **代码修改** — 任何 `.ts`, `.tsx`, `.js`, `.cjs` 文件修改后
-2. **配置修改** — `package.json`, `docker-compose.yml`, `Dockerfile`, `prisma/schema.prisma`
-3. **文档更新** — `README.md`, `CLAUDE.md`
-4. **CI/CD 修改** — `.github/workflows/*.yml`
-
-### 推送流程
+每次完成代码修改后，**自动推送到远程**：
 
 ```bash
-# 每次修改后执行
 git add -A && git commit -m "<conventional commit message>" && git push
 ```
 
 ### Commit 规范
-
-使用 Conventional Commits：
 
 - `feat:` 新功能
 - `fix:` 修复 bug
@@ -29,34 +32,91 @@ git add -A && git commit -m "<conventional commit message>" && git push
 - `ci:` CI/CD 相关
 - `chore:` 杂项
 
-### 分支策略
+## Architecture
 
-- `main` — 生产分支，触发 CI 构建
-- `feature/*` — 功能开发分支
-
-## 项目结构
+### Quiz Flow
 
 ```
-src/
-├── app/           # Next.js App Router
-├── lib/           # 共享库和工具函数
-prisma/            # 数据库 schema 和 seed
-scripts/           # 部署脚本
-public/            # 静态资源
+/ (test page) ──answers──▶  result
 ```
 
-## 部署
+- `src/app/page.tsx` is the main quiz page with 3 screens: welcome → test → result
+- Screen transitions are state changes, not route changes
+- Results are persisted to DB via `/api/results`
 
-- **镜像**: `xiaoyuyu123/magical-girls-witch-trial:latest`
-- **一键部署**: `curl -sSL https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main/scripts/deploy.sh | bash`
-- **数据目录**: `/home/wbti/data/prisma/db`
-- **备份**: 每次容器重启自动备份，保留最近 30 份
+### Matching Algorithm
 
-## 开发命令
+1. Collect dimension scores from answers (skip gate/trigger dims)
+2. Convert each dim's score to tier L=0, M=1, H=2 via config
+3. Distance calculation vs each personality template vector
+4. Sort ascending by distance, take top 3, compute similarity %
+
+### API Surface
+
+- `GET  /api/quiz` — questions, dimensions, types
+- `POST /api/results` — persist test record
+- `GET  /api/visits` — record share visits
+- Admin: `/api/admin/*` (CRUD + stats)
+
+### Database
+
+Prisma + SQLite. Models: `Question`, `Option`, `PersonalityType`, `SpecialType`, `TestRecord`, `ShareVisit`. Schema pushed with `prisma db push`, no migrations folder.
+
+## Deployment
+
+### Architecture
+
+```
+本地开发 → GitHub → GitHub Actions → Docker Hub → 服务器(镜像加速)
+```
+
+### Docker
+
+Multi-stage build using Next.js standalone output. Container entrypoint:
+1. Initializes DB on first boot
+2. Runs `scripts/backup.sh` (SQLite `.backup` → gzip, retains 30 copies)
+3. Starts `crond` for automatic backups every 6 hours
+4. Launches `node server.js`
+
+Port: `8080` (external) → `3000` (internal)
+
+### CI/CD
+
+`.github/workflows/deploy.yml` — triggered on push to `main`. Builds `linux/amd64` image, pushes to `xiaoyuyu123/magical-girls-witch-trial:latest` on Docker Hub.
+
+Required GitHub Secrets:
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+
+### Server Setup (一次性)
 
 ```bash
-bun install        # 安装依赖
-bun dev            # 开发服务器
-bun run build      # 生产构建
-bun run typecheck  # 类型检查
+curl -sSL https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main/scripts/deploy.sh | bash
 ```
+
+### 日常更新
+
+```bash
+cd /home/wbti && docker compose pull && docker compose up -d
+```
+
+### 回滚
+
+```bash
+cd /home/wbti && bash scripts/deploy.sh --rollback
+```
+
+### 恢复数据库
+
+```bash
+bash /home/wbti/scripts/restore-backup.sh
+```
+
+## Auto Sync to GitHub
+
+A Stop hook is configured that automatically commits and pushes to GitHub at the end of each conversation if there are uncommitted changes.
+
+- **Repository**: https://github.com/xiaoyuyu6420/next-arknights-covenant
+- **Branch**: main
+- **Hook trigger**: End of each conversation (Stop event)
+- **Behavior**: If `git diff` shows changes, runs `git add -A && git commit -m 'auto: sync' && git push`
