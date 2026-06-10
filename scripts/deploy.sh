@@ -1,142 +1,131 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-# ============================================================
-#  WBTI 一键部署脚本
-#  Usage: curl -sSL https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main/scripts/deploy.sh | bash
-# ============================================================
+DEPLOY_DIR="/home/wbti"
+GITHUB_RAW="https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main"
+GITHUB_PROXY="https://ghfast.top/https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main"
 
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
+VERSION_FILE="$DEPLOY_DIR/.current-version"
+HEALTH_URL="http://localhost:8080"
+MAX_WAIT=60
 
-info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
-
-REPO="xiaoyuyu6420/next-arknights-covenant"
-BRANCH="main"
-INSTALL_DIR="$HOME/wbti"
-IMAGE="xiaoyuyu123/magical-girls-witch-trial:latest"
-COMPOSE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/docker-compose.yml"
-
-# --------------------------------------------------
-# 1. Preflight checks
-# --------------------------------------------------
-info "检查运行环境..."
-
-command -v docker >/dev/null 2>&1 || error "未安装 Docker，请先安装: https://docs.docker.com/engine/install/"
-docker compose version >/dev/null 2>&1 || error "未安装 Docker Compose v2，请先安装"
-
-# --------------------------------------------------
-# 2. Configure Alibaba Cloud mirror (if in China)
-# --------------------------------------------------
-configure_mirror() {
-  # 需要 root 权限配置镜像加速
-  if [ "$(id -u)" -ne 0 ]; then
-    warn "非 root 用户，跳过镜像加速配置（可选）"
-    return 0
-  fi
-
-  if [ -f /etc/docker/daemon.json ] && grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then
-    info "已检测到 Docker 镜像加速配置，跳过"
-    return 0
-  fi
-
-  # 非交互式环境跳过
-  if [ ! -t 0 ]; then
-    return 0
-  fi
-
+# 回滚函数
+rollback() {
   echo ""
-  warn "检测到未配置 Docker 镜像加速"
-  echo -n "是否配置阿里云镜像加速？[Y/n] "
-  read -r setup_mirror
-  case "${setup_mirror:-Y}" in
-    [nN]*) return 0 ;;
-  esac
+  echo "=== 回滚到上一个版本 ==="
+  if [ ! -f "$VERSION_FILE" ]; then
+    echo "错误: 没有版本记录，无法回滚"
+    exit 1
+  fi
 
+  current=$(cat "$VERSION_FILE")
+  previous=$(grep -v "^$current$" "$VERSION_FILE.history" 2>/dev/null | tail -1)
+
+  if [ -z "$previous" ]; then
+    echo "错误: 没有找到上一个版本"
+    exit 1
+  fi
+
+  echo "当前版本: $current"
+  echo "回滚版本: $previous"
+  read -p "确定回滚吗？(y/N): " confirm
+  if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+    echo "已取消"
+    exit 0
+  fi
+
+  cd "$DEPLOY_DIR"
+  sed -i "s|image: .*|image: xiaoyuyu123/magical-girls-witch-trial:$previous|" docker-compose.yml
+  docker compose pull
+  docker compose up -d
+  echo "$previous" > "$VERSION_FILE"
   echo ""
-  echo "  请前往 https://cr.console.aliyun.com/cn-hangzhou/instances/mirrors 获取你的专属加速地址"
-  echo "  格式如: https://xxxxx.mirror.aliyuncs.com"
-  echo -n "  请输入加速地址 (留空跳过): "
-  read -r mirror_url
-
-  if [ -z "$mirror_url" ]; then
-    warn "跳过镜像加速配置"
-    return 0
-  fi
-
-  # 验证 URL 格式，防止注入
-  if [[ ! "$mirror_url" =~ ^https?://[a-zA-Z0-9./_-]+$ ]]; then
-    error "无效的镜像地址格式"
-  fi
-
-  mkdir -p /etc/docker
-  if [ -f /etc/docker/daemon.json ]; then
-    # 使用 jq 合并配置（更安全）
-    if command -v jq >/dev/null 2>&1; then
-      jq --arg url "$mirror_url" '.registry-mirrors = [.url] + (.registry-mirrors // [])' \
-        /etc/docker/daemon.json > /tmp/daemon.json.tmp && \
-        mv /tmp/daemon.json.tmp /etc/docker/daemon.json
-    else
-      # 回退到简单追加（已验证格式，相对安全）
-      echo "{\"registry-mirrors\":[\"$mirror_url\"]}" > /etc/docker/daemon.json
-    fi
-  else
-    echo "{\"registry-mirrors\":[\"$mirror_url\"]}" > /etc/docker/daemon.json
-  fi
-
-  if command -v systemctl >/dev/null 2>&1; then
-    systemctl daemon-reload
-    systemctl restart docker
-    info "Docker 镜像加速配置完成"
-  else
-    warn "非 systemd 系统，请手动重启 Docker 服务"
-  fi
+  echo "回滚完成，版本: $previous"
+  exit 0
 }
 
-configure_mirror
+if [ "$1" = "--rollback" ] || [ "$1" = "-r" ]; then
+  rollback
+fi
 
-# --------------------------------------------------
-# 3. Create install directory
-# --------------------------------------------------
-info "创建部署目录: ${INSTALL_DIR}"
-mkdir -p "${INSTALL_DIR}/data/prisma/db"
+echo "=== WBTI 卫戍人格测试 部署脚本 ==="
+echo ""
+echo "提示: 使用 --rollback 可回滚到上一个版本"
+echo ""
 
-# --------------------------------------------------
-# 4. Download docker-compose.yml
-# --------------------------------------------------
-info "下载 docker-compose.yml ..."
-curl -sSLf "${COMPOSE_URL}" -o "${INSTALL_DIR}/docker-compose.yml" || error "下载 docker-compose.yml 失败"
+# 1. 创建目录
+echo "[1/4] 创建目录..."
+mkdir -p $DEPLOY_DIR/{data/prisma/db,backups}
+cd $DEPLOY_DIR
 
-# --------------------------------------------------
-# 5. Pull and start
-# --------------------------------------------------
-cd "${INSTALL_DIR}"
+# 2. 备份并下载 docker-compose.yml
+echo "[2/4] 下载 docker-compose.yml..."
+if [ -f docker-compose.yml ]; then
+  backup_name="docker-compose.yml.backup.$(date +%Y%m%d%H%M%S)"
+  cp docker-compose.yml "$backup_name"
+  echo "  已备份: $backup_name"
+fi
+if ! curl -sSf --connect-timeout 10 -o docker-compose.yml "$GITHUB_RAW/docker-compose.yml" 2>/dev/null; then
+  echo "  直连失败，尝试镜像加速..."
+  curl -sSf --connect-timeout 10 -o docker-compose.yml "$GITHUB_PROXY/docker-compose.yml"
+fi
 
-info "拉取镜像 ${IMAGE} ..."
+# 3. 镜像加速配置（可选）
+if [ ! -f /etc/docker/daemon.json ] || ! grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then
+  if [ "$(id -u)" -eq 0 ] && [ -t 0 ]; then
+    echo ""
+    echo "检测到未配置 Docker 镜像加速"
+    echo "  请前往 https://cr.console.aliyun.com/cn-hangzhou/instances/mirrors 获取加速地址"
+    read -p "  请输入加速地址 (留空跳过): " mirror_url
+    if [ -n "$mirror_url" ]; then
+      mkdir -p /etc/docker
+      echo "{\"registry-mirrors\":[\"$mirror_url\"]}" > /etc/docker/daemon.json
+      if command -v systemctl >/dev/null 2>&1; then
+        systemctl daemon-reload && systemctl restart docker
+        echo "  镜像加速配置完成"
+      fi
+    fi
+  fi
+fi
+echo "[3/4] 环境检查完成"
+
+# 记录版本
+CURRENT_VERSION="latest"
+if [ -f "$VERSION_FILE" ]; then
+  PREVIOUS_VERSION=$(cat "$VERSION_FILE")
+  echo "$PREVIOUS_VERSION" >> "$VERSION_FILE.history"
+fi
+echo "$CURRENT_VERSION" > "$VERSION_FILE"
+
+# 4. 拉取并启动
+echo "[4/4] 拉取镜像并启动..."
 docker compose pull
-
-info "启动服务..."
 docker compose up -d
 
-# --------------------------------------------------
-# 6. Done
-# --------------------------------------------------
+# 5. 健康检查
 echo ""
-info "========================================="
-info "  部署完成!"
-info "========================================="
+echo "等待服务启动..."
+waited=0
+while [ $waited -lt $MAX_WAIT ]; do
+  if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
+    echo ""
+    echo "=== 部署成功 ==="
+    echo "访问: http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo '<服务器IP>'):8080"
+    echo "数据: $DEPLOY_DIR/data/prisma/db"
+    echo "备份: $DEPLOY_DIR/backups"
+    echo "版本: $CURRENT_VERSION"
+    echo ""
+    echo "回滚: cd $DEPLOY_DIR && bash scripts/deploy.sh --rollback"
+    echo "恢复数据库: bash scripts/restore-backup.sh"
+    echo "日常更新: cd $DEPLOY_DIR && docker compose pull && docker compose up -d"
+    exit 0
+  fi
+  sleep 2
+  waited=$((waited + 2))
+  echo -n "."
+done
+
 echo ""
-info "  应用地址:    http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo '<服务器IP>'):8080"
-info "  数据目录:    ${INSTALL_DIR}/data/prisma/db"
-info "  备份目录:    ${INSTALL_DIR}/data/prisma/db/backups"
-info "  Compose文件: ${INSTALL_DIR}/docker-compose.yml"
-echo ""
-info "  常用命令:"
-info "    查看日志:  cd ${INSTALL_DIR} && docker compose logs -f"
-info "    停止服务:  cd ${INSTALL_DIR} && docker compose down"
-info "    更新部署:  cd ${INSTALL_DIR} && docker compose pull && docker compose up -d"
-echo ""
+echo "=== 部署完成但服务未就绪 ==="
+echo "请检查日志: cd $DEPLOY_DIR && docker compose logs wbti"
+echo "如果需要回滚: cd $DEPLOY_DIR && bash scripts/deploy.sh --rollback"
