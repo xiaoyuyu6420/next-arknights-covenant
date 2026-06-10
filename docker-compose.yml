@@ -1,6 +1,6 @@
 services:
   wbti:
-    image: ghcr.io/xiaoyuyu6420/next-arknights-covenant:latest
+    image: xiaoyuyu123/magical-girls-witch-trial:latest
     container_name: wbti-app
     ports:
       - "8080:3000"
