@@ -4,7 +4,7 @@
 FROM oven/bun:1 AS builder
 WORKDIR /app
 
-ENV DATABASE_URL=file:./db/wbti.db
+ENV DATABASE_URL=file:/app/data/prisma/db/wbti.db
 
 # Copy dependency files first for better caching
 COPY package.json bun.lock* ./
@@ -33,7 +33,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-ENV DATABASE_URL=file:./db/wbti.db
+ENV DATABASE_URL=file:/app/data/prisma/db/wbti.db
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs \
@@ -58,8 +58,8 @@ COPY scripts/backup.sh /app/scripts/backup.sh
 COPY entrypoint.sh /app/entrypoint.sh
 
 # Make dirs writable, scripts executable
-RUN mkdir -p /app/prisma/db /app/scripts /backups \
-    && chown -R nextjs:nodejs /app/prisma/db /backups \
+RUN mkdir -p /app/data/prisma/db /app/scripts /backups \
+    && chown -R nextjs:nodejs /app/data/prisma/db /backups \
     && chmod +x /app/entrypoint.sh /app/scripts/backup.sh
 
 USER nextjs
