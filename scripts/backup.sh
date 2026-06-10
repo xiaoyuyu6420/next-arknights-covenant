@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-DB_PATH="/app/data/prisma/db/wbti.db"
+DB_PATH="/app/prisma/db/wbti.db"
 BACKUP_DIR="/backups"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_FILE="${BACKUP_DIR}/wbti_${TIMESTAMP}.db"
