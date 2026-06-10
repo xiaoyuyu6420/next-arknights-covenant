@@ -8,6 +8,45 @@
 
 **http://www.jadeai.icu:8080/**
 
+## 🚀 一键部署
+
+```bash
+curl -sSL https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main/scripts/deploy.sh | bash
+```
+
+部署完成后访问 `http://<服务器IP>:8080`
+
+<details>
+<summary>部署脚本功能</summary>
+
+- 检查 Docker 环境
+- 引导配置阿里云镜像加速（可选）
+- 创建部署目录 `/home/wbti`
+- 下载 `docker-compose.yml`
+- 拉取镜像并启动容器
+- 健康检查确认服务就绪
+
+</details>
+
+<details>
+<summary>日常运维</summary>
+
+```bash
+# 更新
+cd /home/wbti && docker compose pull && docker compose up -d
+
+# 回滚
+cd /home/wbti && bash scripts/deploy.sh --rollback
+
+# 恢复数据库
+bash /home/wbti/scripts/restore-backup.sh
+
+# 查看日志
+cd /home/wbti && docker compose logs -f
+```
+
+</details>
+
 ## 数据成果
 
 | 指标 | 数值 |
@@ -44,103 +83,22 @@
 ## 快速开始
 
 ```bash
-# 安装依赖
-bun install
-
-# 启动开发服务器
-bun dev
-
-# 类型检查和生产构建
-bun run typecheck
-bun run build
-
-# 访问
-# 主页: http://localhost:3000
-# 管理后台: http://localhost:3000/admin
+bun install          # 安装依赖
+bun dev              # 启动开发服务器 http://localhost:3000
+bun run build        # 生产构建
+bun run typecheck    # 类型检查
 ```
-
-## 一键部署
-
-服务器上执行：
-
-```bash
-curl -sSL https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main/scripts/deploy.sh | bash
-```
-
-脚本会自动：
-- 检查 Docker 环境
-- 引导配置阿里云镜像加速（可选）
-- 创建部署目录 `/home/wbti`
-- 下载 `docker-compose.yml`
-- 拉取镜像并启动容器
-- 健康检查确认服务就绪
-
-部署完成后访问 `http://<服务器IP>:8080`
-
-### 日常更新
-
-```bash
-cd /home/wbti && docker compose pull && docker compose up -d
-```
-
-### 回滚
-
-```bash
-cd /home/wbti && bash scripts/deploy.sh --rollback
-```
-
-### 恢复数据库
-
-```bash
-bash /home/wbti/scripts/restore-backup.sh
-```
-
-## Docker 部署
-
-```bash
-# 构建并启动
-docker compose up -d
-
-# 自定义端口（默认 8080）
-sed -i 's/8080/9000/' docker-compose.yml && docker compose up -d
-```
-
-数据库文件持久化在 `/home/wbti/data/prisma/db`，备份在 `/home/wbti/backups`。
 
 ## 项目结构
 
 ```
 src/
-├── app/
-│   ├── page.tsx              # 主页（欢迎/测试/结果三屏）
-│   ├── layout.tsx            # 全局布局和字体配置
-│   ├── globals.css           # WBTI 主题变量和全局样式
-│   ├── admin/                # 管理后台页面
-│   └── api/
-│       ├── quiz/             # 获取题目和人格数据
-│       ├── results/          # 保存测试结果
-│       └── admin/            # 管理接口（CRUD + 统计）
-├── lib/
-│   ├── quiz-data.ts          # 默认题目和人格类型数据
-│   └── db.ts                 # Prisma 客户端
-prisma/
-├── schema.prisma             # 数据库模型定义
-└── db/wbti.db                # SQLite 数据库
-public/
-└── img-sy/                   # 表情包图片资源
-scripts/
-├── deploy.sh                 # 一键部署脚本
-├── backup.sh                 # 数据库备份脚本
-└── restore-backup.sh         # 数据库恢复工具
+├── app/           # Next.js App Router
+├── lib/           # 共享库和工具函数
+prisma/            # 数据库 schema 和 seed
+scripts/           # 部署脚本
+public/            # 静态资源
 ```
-
-## 数据模型
-
-- **Question** - 测试题目（普通题/门控题/触发题）
-- **Option** - 选项（含分值或分支值）
-- **PersonalityType** - 25 种人格类型（向量编码 + 描述）
-- **SpecialType** - 特殊人格类型（攻略大佬 / 电子斗蛐蛐）
-- **TestRecord** - 测试记录（用户 ID、结果、相似度、时间戳）
 
 ## License
 
