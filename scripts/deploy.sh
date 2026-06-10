@@ -17,7 +17,7 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
 REPO="xiaoyuyu6420/next-arknights-covenant"
 BRANCH="main"
-INSTALL_DIR="/opt/wbti"
+INSTALL_DIR="$HOME/wbti"
 IMAGE="xiaoyuyu123/magical-girls-witch-trial:latest"
 COMPOSE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/docker-compose.yml"
 
@@ -29,16 +29,23 @@ info "检查运行环境..."
 command -v docker >/dev/null 2>&1 || error "未安装 Docker，请先安装: https://docs.docker.com/engine/install/"
 docker compose version >/dev/null 2>&1 || error "未安装 Docker Compose v2，请先安装"
 
-if [ "$(id -u)" -ne 0 ]; then
-  error "请使用 root 用户或 sudo 执行此脚本"
-fi
-
 # --------------------------------------------------
 # 2. Configure Alibaba Cloud mirror (if in China)
 # --------------------------------------------------
 configure_mirror() {
+  # 需要 root 权限配置镜像加速
+  if [ "$(id -u)" -ne 0 ]; then
+    warn "非 root 用户，跳过镜像加速配置（可选）"
+    return 0
+  fi
+
   if [ -f /etc/docker/daemon.json ] && grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then
     info "已检测到 Docker 镜像加速配置，跳过"
+    return 0
+  fi
+
+  # 非交互式环境跳过
+  if [ ! -t 0 ]; then
     return 0
   fi
 
@@ -61,26 +68,33 @@ configure_mirror() {
     return 0
   fi
 
+  # 验证 URL 格式，防止注入
+  if [[ ! "$mirror_url" =~ ^https?://[a-zA-Z0-9./_-]+$ ]]; then
+    error "无效的镜像地址格式"
+  fi
+
   mkdir -p /etc/docker
   if [ -f /etc/docker/daemon.json ]; then
-    # Merge into existing config
-    python3 -c "
-import json, sys
-with open('/etc/docker/daemon.json') as f:
-    cfg = json.load(f)
-cfg.setdefault('registry-mirrors', [])
-if '$mirror_url' not in cfg['registry-mirrors']:
-    cfg['registry-mirrors'].insert(0, '$mirror_url')
-with open('/etc/docker/daemon.json', 'w') as f:
-    json.dump(cfg, f, indent=2)
-" 2>/dev/null || echo "{\"registry-mirrors\":[\"$mirror_url\"]}" > /etc/docker/daemon.json
+    # 使用 jq 合并配置（更安全）
+    if command -v jq >/dev/null 2>&1; then
+      jq --arg url "$mirror_url" '.registry-mirrors = [.url] + (.registry-mirrors // [])' \
+        /etc/docker/daemon.json > /tmp/daemon.json.tmp && \
+        mv /tmp/daemon.json.tmp /etc/docker/daemon.json
+    else
+      # 回退到简单追加（已验证格式，相对安全）
+      echo "{\"registry-mirrors\":[\"$mirror_url\"]}" > /etc/docker/daemon.json
+    fi
   else
     echo "{\"registry-mirrors\":[\"$mirror_url\"]}" > /etc/docker/daemon.json
   fi
 
-  systemctl daemon-reload
-  systemctl restart docker
-  info "Docker 镜像加速配置完成"
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload
+    systemctl restart docker
+    info "Docker 镜像加速配置完成"
+  else
+    warn "非 systemd 系统，请手动重启 Docker 服务"
+  fi
 }
 
 configure_mirror
