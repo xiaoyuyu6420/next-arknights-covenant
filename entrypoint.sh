@@ -7,7 +7,7 @@ DB_PATH="/app/data/prisma/db/wbti.db"
 if [ ! -f "$DB_PATH" ]; then
   echo "Initializing database..."
   mkdir -p /app/data/prisma/db
-  cp /app/data/prisma/db/wbti.db.init "$DB_PATH"
+  cp /app/prisma/db/wbti.db.init "$DB_PATH"
   echo "Database initialized."
 fi
 
