@@ -2,8 +2,10 @@
 set -e
 
 DEPLOY_DIR="/home/wbti"
-GITHUB_RAW="https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main"
-GITHUB_PROXY="https://ghfast.top/https://raw.githubusercontent.com/xiaoyuyu6420/next-arknights-covenant/main"
+REPO="xiaoyuyu6420/next-arknights-covenant"
+GITHUB_RAW="https://raw.githubusercontent.com/${REPO}/main"
+GITHUB_PROXY="https://ghfast.top/https://raw.githubusercontent.com/${REPO}/main"
+IMAGE="xiaoyuyu123/magical-girls-witch-trial"
 
 VERSION_FILE="$DEPLOY_DIR/.current-version"
 HEALTH_URL="http://localhost:8080"
@@ -35,7 +37,7 @@ rollback() {
   fi
 
   cd "$DEPLOY_DIR"
-  sed -i "s|image: .*|image: xiaoyuyu123/magical-girls-witch-trial:$previous|" docker-compose.yml
+  sed -i "s|image: ${IMAGE}.*|image: ${IMAGE}:${previous}|" docker-compose.yml
   docker compose pull
   docker compose up -d
   echo "$previous" > "$VERSION_FILE"
@@ -70,7 +72,12 @@ if ! curl -sSf --connect-timeout 10 -o docker-compose.yml "$GITHUB_RAW/docker-co
   curl -sSf --connect-timeout 10 -o docker-compose.yml "$GITHUB_PROXY/docker-compose.yml"
 fi
 
-# 3. 镜像加速配置（可选）
+# 3. 获取最新版本 SHA
+echo "[3/4] 获取最新版本..."
+LATEST_SHA=$(curl -sSf "https://api.github.com/repos/${REPO}/commits/main" 2>/dev/null | grep -m1 '"sha"' | cut -d'"' -f4 || echo "latest")
+echo "  最新版本: ${LATEST_SHA:0:7}"
+
+# 镜像加速配置（可选）
 if [ ! -f /etc/docker/daemon.json ] || ! grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then
   if [ "$(id -u)" -eq 0 ] && [ -t 0 ]; then
     echo ""
@@ -78,22 +85,27 @@ if [ ! -f /etc/docker/daemon.json ] || ! grep -q "registry-mirrors" /etc/docker/
     echo "  请前往 https://cr.console.aliyun.com/cn-hangzhou/instances/mirrors 获取加速地址"
     read -p "  请输入加速地址 (留空跳过): " mirror_url
     if [ -n "$mirror_url" ]; then
-      mkdir -p /etc/docker
-      echo "{\"registry-mirrors\":[\"$mirror_url\"]}" > /etc/docker/daemon.json
-      if command -v systemctl >/dev/null 2>&1; then
-        systemctl daemon-reload && systemctl restart docker
-        echo "  镜像加速配置完成"
+      if [[ ! "$mirror_url" =~ ^https?://[a-zA-Z0-9./_-]+$ ]]; then
+        echo "  无效的镜像地址格式，跳过"
+      else
+        mkdir -p /etc/docker
+        echo "{\"registry-mirrors\":[\"$mirror_url\"]}" > /etc/docker/daemon.json
+        if command -v systemctl >/dev/null 2>&1; then
+          systemctl daemon-reload && systemctl restart docker
+          echo "  镜像加速配置完成"
+        fi
       fi
     fi
   fi
 fi
-echo "[3/4] 环境检查完成"
 
 # 记录版本
-CURRENT_VERSION="latest"
+CURRENT_VERSION="${LATEST_SHA:0:7}"
 if [ -f "$VERSION_FILE" ]; then
   PREVIOUS_VERSION=$(cat "$VERSION_FILE")
-  echo "$PREVIOUS_VERSION" >> "$VERSION_FILE.history"
+  if [ -n "$PREVIOUS_VERSION" ] && [ "$PREVIOUS_VERSION" != "$CURRENT_VERSION" ]; then
+    echo "$PREVIOUS_VERSION" >> "$VERSION_FILE.history"
+  fi
 fi
 echo "$CURRENT_VERSION" > "$VERSION_FILE"
 
