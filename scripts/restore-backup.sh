@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-BACKUP_DIR="/home/wbti/backups"
+BACKUP_DIR="/home/wbti/data/backups"
 DB_PATH="/home/wbti/data/prisma/db/wbti.db"
 
 echo "=== 数据库恢复工具 ==="
@@ -12,7 +12,6 @@ if [ ! -d "$BACKUP_DIR" ]; then
   exit 1
 fi
 
-# Safe file listing with null delimiter
 mapfile -t backups < <(find "$BACKUP_DIR" -maxdepth 1 -name "*.db.gz" -type f -print0 | sort -zr | xargs -0 -n1 echo)
 
 if [ ${#backups[@]} -eq 0 ]; then
@@ -39,7 +38,6 @@ else
   read -p "选择备份编号 (默认 0): " selection
   selection=${selection:-0}
 
-  # Validate numeric input
   if ! [[ "$selection" =~ ^[0-9]+$ ]]; then
     echo "错误: 请输入数字"
     exit 1
@@ -76,7 +74,6 @@ fi
 echo "恢复数据库..."
 gunzip -c "$selected_backup" > "$DB_PATH"
 
-# Verify database integrity
 if ! sqlite3 "$DB_PATH" "PRAGMA integrity_check;" > /dev/null 2>&1; then
   echo "警告: 数据库完整性检查失败"
 fi
@@ -86,7 +83,6 @@ echo "数据库已恢复"
 echo "启动服务..."
 docker compose start wbti
 
-echo "等待服务启动..."
 sleep 10
 
 if curl -sf http://localhost:8080 > /dev/null 2>&1; then
