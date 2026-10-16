@@ -6,10 +6,13 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
-    "db:seed": "bun run prisma/seed.ts",
-    "db:reset": "prisma db push --force-reset && bun run db:seed"
+    "db:seed": "node scripts/run-ts.cjs prisma/seed.ts",
+    "db:reset": "prisma db push --force-reset && node scripts/run-ts.cjs prisma/seed.ts",
+    "db:sync": "node scripts/run-ts.cjs scripts/sync-locale.ts",
+    "db:sync:ja": "node scripts/run-ts.cjs scripts/sync-locale.ts ja",
+    "db:sync:zh": "node scripts/run-ts.cjs scripts/sync-locale.ts zh"
   },
   "dependencies": {
     "@prisma/client": "6",

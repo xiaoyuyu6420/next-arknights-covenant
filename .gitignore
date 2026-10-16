@@ -26,6 +26,7 @@ node_modules
 
 # debug
 npm-debug.log*
+package-lock.json
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
@@ -53,6 +54,8 @@ server.log
 
 # Skills directory
 /skills/
+.agents/
+skills-lock.json
 
 # Database
 prisma/db/
@@ -61,6 +64,7 @@ prisma/db/
 
 # Backups
 wbti数据备份/
+wbti 数据备份/
 wbti数据备份.zip
 
 # Docker

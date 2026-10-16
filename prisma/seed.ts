@@ -1,27 +1,31 @@
 import { PrismaClient } from '@prisma/client'
 import { QUIZ_DATA } from '../src/lib/quiz-data'
+import { QUIZ_DATA_JA } from '../src/lib/quiz-data-ja'
 
 const prisma = new PrismaClient()
 
-async function main() {
-  console.log('Seeding database...')
+interface QuizDataSource {
+  questions: { dim: string; text: string; options: { label: string; score: number }[] }[]
+  gateQuestion: { text: string; options: { label: string; value: string }[] }
+  triggerQuestion: { text: string; options: { label: string; value: string; trigger?: string }[] }
+  types: { code: string; name: string; group: string; emoji: string; color: string; img: string; vector: string; desc: string; slogan: string }[]
+  specialTypes: { code: string; name: string; emoji: string; color: string; img: string; trigger: string; desc: string; slogan: string }[]
+}
 
-  // Clear existing data
-  await prisma.option.deleteMany()
-  await prisma.question.deleteMany()
-  await prisma.personalityType.deleteMany()
-  await prisma.specialType.deleteMany()
+async function seedLocale(prisma: PrismaClient, data: QuizDataSource, locale: string) {
+  console.log(`\nSeeding locale: ${locale}`)
 
   // Seed regular questions
-  for (let i = 0; i < QUIZ_DATA.questions.length; i++) {
-    const q = QUIZ_DATA.questions[i]
-    const question = await prisma.question.create({
+  for (let i = 0; i < data.questions.length; i++) {
+    const q = data.questions[i]
+    await prisma.question.create({
       data: {
         type: 'regular',
         dim: q.dim,
         text: q.text,
         order: i,
         active: true,
+        locale,
         options: {
           create: q.options.map((opt, j) => ({
             label: opt.label,
@@ -31,19 +35,20 @@ async function main() {
         },
       },
     })
-    console.log(`  Question ${i + 1}: ${q.dim} ✓`)
+    console.log(`  [${locale}] Question ${i + 1}: ${q.dim} ✓`)
   }
 
   // Seed gate question
-  const gateQ = await prisma.question.create({
+  await prisma.question.create({
     data: {
       type: 'gate',
       dim: '',
-      text: QUIZ_DATA.gateQuestion.text,
-      order: QUIZ_DATA.questions.length,
+      text: data.gateQuestion.text,
+      order: data.questions.length,
       active: true,
+      locale,
       options: {
-        create: QUIZ_DATA.gateQuestion.options.map((opt, j) => ({
+        create: data.gateQuestion.options.map((opt, j) => ({
           label: opt.label,
           value: opt.value,
           order: j,
@@ -51,18 +56,19 @@ async function main() {
       },
     },
   })
-  console.log(`  Gate question ✓`)
+  console.log(`  [${locale}] Gate question ✓`)
 
   // Seed trigger question
-  const triggerQ = await prisma.question.create({
+  await prisma.question.create({
     data: {
       type: 'trigger',
       dim: '',
-      text: QUIZ_DATA.triggerQuestion.text,
-      order: QUIZ_DATA.questions.length + 1,
+      text: data.triggerQuestion.text,
+      order: data.questions.length + 1,
       active: true,
+      locale,
       options: {
-        create: QUIZ_DATA.triggerQuestion.options.map((opt, j) => ({
+        create: data.triggerQuestion.options.map((opt, j) => ({
           label: opt.label,
           value: opt.value,
           trigger: (opt as { trigger?: string }).trigger || null,
@@ -71,13 +77,14 @@ async function main() {
       },
     },
   })
-  console.log(`  Trigger question ✓`)
+  console.log(`  [${locale}] Trigger question ✓`)
 
   // Seed personality types
-  for (const t of QUIZ_DATA.types) {
+  for (const t of data.types) {
     await prisma.personalityType.create({
       data: {
         code: t.code,
+        locale,
         name: t.name,
         group: t.group,
         emoji: t.emoji,
@@ -88,14 +95,15 @@ async function main() {
         slogan: t.slogan,
       },
     })
-    console.log(`  Type ${t.code}: ${t.name} ✓`)
+    console.log(`  [${locale}] Type ${t.code}: ${t.name} ✓`)
   }
 
   // Seed special types
-  for (const t of QUIZ_DATA.specialTypes) {
+  for (const t of data.specialTypes) {
     await prisma.specialType.create({
       data: {
         code: t.code,
+        locale,
         name: t.name,
         emoji: t.emoji,
         color: t.color,
@@ -105,10 +113,24 @@ async function main() {
         slogan: t.slogan,
       },
     })
-    console.log(`  Special ${t.code}: ${t.name} ✓`)
+    console.log(`  [${locale}] Special ${t.code}: ${t.name} ✓`)
   }
+}
 
-  console.log(`\nDone! Seeded ${QUIZ_DATA.questions.length + 2} questions, ${QUIZ_DATA.types.length} types, ${QUIZ_DATA.specialTypes.length} special types.`)
+async function main() {
+  console.log('Seeding database...')
+
+  // Clear existing data
+  await prisma.option.deleteMany()
+  await prisma.question.deleteMany()
+  await prisma.personalityType.deleteMany()
+  await prisma.specialType.deleteMany()
+
+  // Seed both locales
+  await seedLocale(prisma, QUIZ_DATA as unknown as QuizDataSource, 'zh')
+  await seedLocale(prisma, QUIZ_DATA_JA as unknown as QuizDataSource, 'ja')
+
+  console.log(`\nDone! Seeded both zh and ja locales.`)
 }
 
 main()
